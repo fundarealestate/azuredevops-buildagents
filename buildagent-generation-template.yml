@@ -179,6 +179,7 @@ stages:
                 -VirtualNetworkName '$(vnet_name)' `
                 -VirtualNetworkRG '$(vnet_rg)' `
                 -VirtualNetworkSubnet '$(vnet_subnet)'
+                -Tags @{ExcludeMdeAutoProvisioning = $true}
             env:
               PACKER_LOG: 1
               PACKER_LOG_PATH: "$(Agent.TempDirectory)/packer-log.txt"
