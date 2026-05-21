@@ -12,11 +12,11 @@ parameters:
     displayName: Agent Pool
     type: object
     default:
-      name: 'ci-agent-pool'
+      name: "ci-agent-pool"
   - name: variable_group_name
     displayName: Variable Group
     type: string
-    default: 'Image Generation Variables'
+    default: "Image Generation Variables"
   - name: runner_images_version
     displayName: Runner-Images Version
     type: string
@@ -28,7 +28,11 @@ parameters:
   - name: depends_on
     displayName: First Stage Depends On
     type: object
-    default: ' '
+    default: " "
+  - name: gallery_image_name
+    displayName: Gallery Image Name
+    type: string
+    default: ""
   - name: repository_base_path
     displayName: Scripts Path
     type: string
@@ -36,14 +40,14 @@ parameters:
 
 stages:
   - stage: buildagent_template_vm_${{ parameters.image_type }}
-    displayName: 'Build Agent Template VM (${{ parameters.image_type }})'
+    displayName: "Build Agent Template VM (${{ parameters.image_type }})"
     ${{ if ne(parameters.depends_on, ' ') }}:
       dependsOn: ${{ parameters.depends_on }}
     jobs:
       - job: generate_image
         displayName: Image Generation (${{ parameters.image_type }})
-        timeoutInMinutes: '600'
-        cancelTimeoutInMinutes: '30'
+        timeoutInMinutes: "600"
+        cancelTimeoutInMinutes: "30"
         variables:
           - group: ${{ parameters.variable_group_name }}
         pool:
@@ -51,15 +55,15 @@ stages:
 
         steps:
           - checkout: self
-          
+
           - ${{ if ne(parameters.repository_base_path, '.') }}:
               - checkout: ${{ parameters.repository_base_path }}
 
           - task: PowerShell@2
             name: setVars
-            displayName: 'Set image template variables'
+            displayName: "Set image template variables"
             inputs:
-              targetType: 'inline'
+              targetType: "inline"
               script: |
                 $runner_images_version = '${{ parameters.runner_images_version }}'
                 $repository_base_path = '${{ parameters.repository_base_path }}'
@@ -95,7 +99,7 @@ stages:
                 $template_path = Join-Path (Join-Path (Join-Path "runner-images" "images") $os) "templates"
                 $image_name = "$image_type-$(Build.BuildId)"
                 $temp_rg_name = "packer-temp-$image_name"
-                $gallery_image_name = "$image_type-agentpool-full"
+                $gallery_image_name = if ('${{ parameters.gallery_image_name }}' -ne '') { '${{ parameters.gallery_image_name }}' } else { "$image_type-agentpool-full" }
                 $gallery_image_version = "$((Get-Date).ToString("yyyyMMdd")).$(Build.BuildId).0"
 
                 Write-Host "##vso[task.setvariable variable=repository_base_path]$repository_base_path"
@@ -109,7 +113,7 @@ stages:
                 Write-Host "##vso[task.setvariable variable=temp_rg_name]$temp_rg_name"
                 Write-Host "##vso[task.setvariable variable=gallery_image_name]$gallery_image_name"
                 Write-Host "##vso[task.setvariable variable=gallery_image_version]$gallery_image_version"
-                
+
 
                 $client_id = "$(DOBA-CLIENT-ID)"
                 $client_secret = "$(DOBA-CLIENT-SECRET)"
@@ -139,9 +143,9 @@ stages:
 
           - task: PowerShell@2
             name: gitCheckout
-            displayName: 'Checkout the GitHub repository'
+            displayName: "Checkout the GitHub repository"
             inputs:
-              targetType: 'inline'
+              targetType: "inline"
               script: |
                 $github_owner = 'actions'
                 $repo_name = 'runner-images'
@@ -149,7 +153,7 @@ stages:
                 if (Test-Path ".\$repo_name\") { Remove-Item -Recurse -Force ".\$repo_name\" }
 
                 git clone "https://github.com/$github_owner/$repo_name.git"
-                
+
                 if ('$(runner_images_version)' -ne 'alpha') {
                   $include_prerelease = if ('$(runner_images_version)' -eq 'prerelease') { $true } else { $false }
                   Write-Output "include_prerelease = $include_prerelease"
@@ -190,9 +194,9 @@ stages:
               GALLERY_STORAGE_ACCOUNT_TYPE: "$(gallery_storage_account_type)"
 
           - task: PowerShell@2
-            displayName: 'Copy image artifacts to the separate directory'
+            displayName: "Copy image artifacts to the separate directory"
             inputs:
-              targetType: 'inline'
+              targetType: "inline"
               script: |
                 $rootDirectoryName = if ("$(image_type)".StartsWith("ubuntu")) { "ubuntu" } else { "windows" }
                 $rootDirectoryPath = Join-Path (Join-Path "runner-images" "images") $rootDirectoryName | Resolve-Path
@@ -206,16 +210,16 @@ stages:
                 }
 
           - task: PowerShell@2
-            displayName: 'Print markdown software report'
+            displayName: "Print markdown software report"
             inputs:
-              targetType: 'inline'
+              targetType: "inline"
               script: |
                 Get-Content -Path "$(Build.ArtifactStagingDirectory)/$(image_readme_name)"
 
           - task: PowerShell@2
-            displayName: 'Print json software report'
+            displayName: "Print json software report"
             inputs:
-              targetType: 'inline'
+              targetType: "inline"
               script: |
                 $softwareReportPath = "$(Build.ArtifactStagingDirectory)/software-report.json"
                 if (Test-Path $softwareReportPath) {
@@ -224,13 +228,13 @@ stages:
 
           - task: PublishBuildArtifacts@1
             inputs:
-              ArtifactName: 'Built_VM_Artifacts'
+              ArtifactName: "Built_VM_Artifacts"
             displayName: Publish Artifacts
 
           - task: PowerShell@2
-            displayName: 'Print provisioners duration'
+            displayName: "Print provisioners duration"
             inputs:
-              targetType: 'filePath'
+              targetType: "filePath"
               filePath: ./runner-images/images.CI/measure-provisioners-duration.ps1
               arguments:
                 -PackerLogPath "$(Agent.TempDirectory)/packer-log.txt" `
@@ -238,10 +242,10 @@ stages:
                 -PrintTopNLongest 25
 
           - task: PowerShell@2
-            displayName: 'Authenticate to Azure in Azure CLI'
+            displayName: "Authenticate to Azure in Azure CLI"
             condition: always()
             inputs:
-              targetType: 'inline'
+              targetType: "inline"
               script: |
                 az login --service-principal --username '$(client_id)' --password '$(client_secret)' --tenant '$(tenant_id)' | Out-Null
                 az account set --subscription '$(subscription_id)' | Out-Null
@@ -261,4 +265,4 @@ stages:
               targetType: filePath
               filePath: ${{ parameters.repository_base_path }}/scripts/cleanup-gallery-temporaryimage.ps1
               arguments: -ManagedImageName '$(image_name)' `
-               -ResourceGroup '$(image_rg_name)'
+                -ResourceGroup '$(image_rg_name)'
