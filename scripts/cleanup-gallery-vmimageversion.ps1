@@ -28,7 +28,7 @@ try {
 catch  {
     Write-Host "##vso[task.logissue type=error;] Gallery '$GalleryName' not found"
     Write-Host "##vso[task.complete result=Failed;]Task failed!"
-    exit 0
+    exit 1
 
 }
 
@@ -44,27 +44,26 @@ if ($gallery) {
         catch {
             Write-Host "##vso[task.logissue type=error;] Imagedefinition '$imageDefinition' not found"
             Write-Host "##vso[task.complete result=Failed;]Task failed!"
-            exit 0
+            exit 1
         }
                 
         if ($imageDef) {
             # Get all images of the image definition
             $images = Get-AzGalleryImageVersion -ResourceGroupName $GalleryResourceGroup -GalleryImageDefinitionName $imageDef.Name  -GalleryName $gallery.Name
-               
-            if ($images.Count -ge $ImageCountThreshold) {
-                # Sort the images by creation timestamp in ascending order
-                #$sortedImages = $images | Sort-Object -Property { [DateTime]::ParseExact($_.PublishingProfile.PublishedDate, 'dd/MM/yyyy HH:mm:ss', $null) } 
-                $sortedImages = $images | Sort-Object -Property $_.PublishingProfile.PublishedDate 
 
-                # Remove all images except the most recent ones
-                $imagesToRemove = $sortedImages[0..($sortedImages.Count - $GalleryImagesToKeep - 1 )]
+            # Filter to succeeded versions only and sort by published date ascending (oldest first)
+            $succeededImages = $images | Where-Object { $_.ProvisioningState -eq 'Succeeded' } | Sort-Object -Property { $_.PublishingProfile.PublishedDate }
+               
+            if ($succeededImages.Count -ge $ImageCountThreshold) {
+                # Remove all succeeded images except the most recent ones
+                $imagesToRemove = $succeededImages[0..($succeededImages.Count - $GalleryImagesToKeep - 1)]
                 foreach ($imageToRemove in $imagesToRemove) {
                     Write-Host "##[section]Removing image version for image definition '$imageDefinition': $($imageToRemove.Name) with $($imageToRemove.PublishingProfile.PublishedDate)"
                     $JobList += Remove-AzGalleryImageVersion -ResourceGroupName $GalleryResourceGroup -GalleryName $gallery.Name -GalleryImageDefinitionName $imageDefinition -Name $imageToRemove.Name -Force -AsJob
                     $needToWait = $true
                 }
-                } else {
-                Write-Host "##[section]The number of images for image definition '$imageDefinition' has no more than $GalleryImagesToKeep images. No images will be removed."
+            } else {
+                Write-Host "##[section]The number of succeeded images for image definition '$imageDefinition' is $($succeededImages.Count), which is no more than $GalleryImagesToKeep. No images will be removed."
             }
         }
    }
@@ -72,8 +71,7 @@ if ($gallery) {
 
 if ($needToWait) {
     Write-Host "##[section]Waiting for the image removal jobs to finish."
-    $JobList | Get-Job | Wait-Job | Receive-Job | Format-Table -AutoSize
-    $JobList
+    $JobList | Wait-Job | Receive-Job | Format-Table -AutoSize
 }
 else {
     Write-Host "##[section]No image removal jobs were started."

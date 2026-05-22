@@ -125,8 +125,11 @@ stages:
                 $gallery_rg_name = "$(DOBA-GALLERY-RESOURCE-GROUP)"
                 $gallery_storage_account_type = "$(DOBA-GALLERY-STORAGE-ACCOUNT-TYPE)"
                 try { $vnet_name = "$(DOBA-VNET-NAME)" } catch { $vnet_name = $null }
+                if ($vnet_name -eq '$(DOBA-VNET-NAME)') { $vnet_name = $null }
                 try { $vnet_rg = "$(DOBA-VNET-RESOURCE-GROUP)" } catch { $vnet_rg = $null }
+                if ($vnet_rg -eq '$(DOBA-VNET-RESOURCE-GROUP)') { $vnet_rg = $null }
                 try { $vnet_subnet = "$(DOBA-VNET-SUBNET)" } catch { $vnet_subnet = $null }
+                if ($vnet_subnet -eq '$(DOBA-VNET-SUBNET)') { $vnet_subnet = $null }
 
                 Write-Host "##vso[task.setvariable variable=client_id]$client_id"
                 Write-Host "##vso[task.setvariable variable=client_secret;isSecret=true]$client_secret"
@@ -162,7 +165,16 @@ stages:
                   cd runner-images
                   git checkout ($latest_release.tag_name)
                 }
-
+          
+          - task: PowerShell@2
+            name: fixBuildImageScript
+            displayName: 'Fix Build Image Script'
+            inputs:
+              targetType: 'inline'
+              script: |
+                $buildImageScriptPath = Join-Path (Join-Path (Join-Path "runner-images" "images.CI") "linux-and-win") "build-image.ps1"
+                (Get-Content $buildImageScriptPath).Replace('"$buildName*"', '"$buildName.azure-arm.image"') | Set-Content $buildImageScriptPath
+          
           - task: PowerShell@2
             name: buildVm
             displayName: "Build VM"
@@ -182,7 +194,7 @@ stages:
                 -ImageOs '$(image_os)' `
                 -VirtualNetworkName '$(vnet_name)' `
                 -VirtualNetworkRG '$(vnet_rg)' `
-                -VirtualNetworkSubnet '$(vnet_subnet)'
+                -VirtualNetworkSubnet '$(vnet_subnet)' `
                 -Tags @{ExcludeMdeAutoProvisioning = $true}
             env:
               PACKER_LOG: 1
