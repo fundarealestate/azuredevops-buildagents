@@ -1,0 +1,14 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: azuredevops-buildagents
+  description: |
+    This project generates self-hosted build agents based on the official Microsoft-hosted build agents images, in an Azure DevOps Pipeline. The resulting Azure Managed Image will be add to an Azure Compute Gallery so that it can be used by a Virtual Machine Scale Set. This Virtual Machine Scale Set is managed by Azure DevOps as a Azure Virtual Machine Scale Set Agent.
+  annotations:
+    dev.azure.com/project: 'team sre'
+    dev.azure.com/build-definition: 'azuredevops-buildagents - build'
+    github.com/project-slug: fundarealestate/azuredevops-buildagents
+spec:
+  type: image
+  owner: team-sre
+  lifecycle: production
